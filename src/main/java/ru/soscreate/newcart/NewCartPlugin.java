@@ -2,9 +2,13 @@ package ru.soscreate.newcart;
 
 import io.github.lumine1909.customworldheight.CustomWorldHeight;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.world.ChunkLoadEvent;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,25 +16,34 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Queue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class NewCartPlugin extends CustomWorldHeight {
+public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private static final Pattern REGION_NAME = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
-    private static final int OLD_BOTTOM = -64;
     private static final int NEW_BOTTOM = -176;
     private static final int NEW_HEIGHT = 496;
     private static final int BEDROCK_Y = -164;
     private static final int DEEPSLATE_START = -163;
-    private int chunksPerTick;
+    private static final int DEEPSLATE_END = -64;
+
+    // A small vertical slice is changed each tick. This avoids doing 25,856
+    // block writes in one server tick for every chunk.
+    private static final int LAYERS_PER_TICK = 2;
+
+    private String targetWorldName;
+    private final Queue<ChunkPos> queue = new ArrayDeque<>();
+    private final Set<Long> queued = new HashSet<>();
+    private ChunkTask activeTask;
+    private long totalQueued;
+    private long completed;
 
     @Override
     public void onLoad() {
         migrateOldConfigIfNeeded();
-        // Initialize the embedded engine without its first-run self-disable/restart cycle.
-        // The parent onLoad only sets this static plugin reference and disables itself
-        // when config.yml is absent; we create the default config here instead.
         saveDefaultConfig();
         CustomWorldHeight.plugin = this;
     }
@@ -54,10 +67,6 @@ public final class NewCartPlugin extends CustomWorldHeight {
         try {
             if (!backup.exists()) Files.copy(configFile.toPath(), backup.toPath());
             if (legacyFormat) current = new YamlConfiguration();
-
-            // Paper/Minecraft 1.21.4 requires minY and height to align to 16-block sections.
-            // minY=-176 and height=496 keep maxY=319 while preserving the requested
-            // 100 deepslate layers (-163..-64) and bedrock at -164.
             current.set("new-cart.world", worldName);
             current.set("new-cart.min-y", NEW_BOTTOM);
             current.set("new-cart.height", NEW_HEIGHT);
@@ -81,26 +90,37 @@ public final class NewCartPlugin extends CustomWorldHeight {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        // Registers the embedded CustomWorldHeight world-init handler.
+
         super.onEnable();
 
-        String worldName = getConfig().getString("new-cart.world", "world");
-        chunksPerTick = Math.max(1, getConfig().getInt("chunks-per-tick", 1));
+        targetWorldName = getConfig().getString("new-cart.world", "world");
         if (getConfig().getInt("new-cart.min-y", NEW_BOTTOM) != NEW_BOTTOM
                 || getConfig().getInt("new-cart.height", NEW_HEIGHT) != NEW_HEIGHT) {
             getLogger().severe("This build requires min-y=-176 and height=496. No chunks were changed.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        getLogger().info("NewCart is running as a single plugin. Target world: " + worldName
-                + "; minY=-176; maxY=319; height=496.");
-        Bukkit.getScheduler().runTaskLater(this, () -> beginMigration(worldName), 40L);
+
+        Bukkit.getPluginManager().registerEvents(this, this);
+        getLogger().info("NewCart 1.0.5 enabled: existing-world migration plus automatic ChunkLoadEvent processing; "
+                + "2 deepslate layers per tick; bedrock at Y=-164.");
+        Bukkit.getScheduler().runTaskLater(this, this::beginMigration, 40L);
     }
 
-    private void beginMigration(String worldName) {
-        World world = Bukkit.getWorld(worldName);
+    // Every chunk loaded after the plugin starts is added to the front of the
+    // queue, so chunks the player visits are not left waiting behind a huge
+    // old-world scan.
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent event) {
+        if (!event.getWorld().getName().equals(targetWorldName)) return;
+        Chunk chunk = event.getChunk();
+        enqueue(new ChunkPos(chunk.getX(), chunk.getZ()), true);
+    }
+
+    private void beginMigration() {
+        World world = Bukkit.getWorld(targetWorldName);
         if (world == null) {
-            getLogger().severe("World '" + worldName + "' is not loaded. No chunks were changed.");
+            getLogger().severe("World '" + targetWorldName + "' is not loaded. No chunks were changed.");
             return;
         }
         if (world.getMinHeight() != NEW_BOTTOM || world.getMaxHeight() != 320) {
@@ -109,14 +129,15 @@ public final class NewCartPlugin extends CustomWorldHeight {
             return;
         }
 
-        getLogger().info("World height verified: minY=-176 maxY=320. Starting existing-chunk migration.");
+        getLogger().info("World height verified: minY=-176 maxY=320. Scanning existing region chunks; "
+                + "newly loaded chunks are also captured automatically.");
         Path regionDir = world.getWorldFolder().toPath().resolve("region");
         if (!Files.isDirectory(regionDir)) {
-            getLogger().warning("No region directory found; no existing chunks to migrate.");
+            getLogger().warning("No region directory found; waiting for player-loaded chunks.");
             return;
         }
 
-        Queue<ChunkPos> queue = new ArrayDeque<>();
+        long found = 0;
         try (var files = Files.list(regionDir)) {
             for (Path file : files.filter(p -> REGION_NAME.matcher(p.getFileName().toString()).matches()).toList()) {
                 Matcher matcher = REGION_NAME.matcher(file.getFileName().toString());
@@ -128,7 +149,10 @@ public final class NewCartPlugin extends CustomWorldHeight {
                     for (int localZ = 0; localZ < 32; localZ++) {
                         for (int localX = 0; localX < 32; localX++) {
                             raf.seek((localX + localZ * 32) * 4L);
-                            if (raf.readInt() != 0) queue.add(new ChunkPos(regionX * 32 + localX, regionZ * 32 + localZ));
+                            if (raf.readInt() != 0) {
+                                enqueue(new ChunkPos(regionX * 32 + localX, regionZ * 32 + localZ), false);
+                                found++;
+                            }
                         }
                     }
                 }
@@ -138,45 +162,112 @@ public final class NewCartPlugin extends CustomWorldHeight {
             return;
         }
 
-        int total = queue.size();
-        getLogger().info("Found " + total + " existing chunks. Adding 100 deepslate layers below the existing floor.");
-        processBatch(world, queue, total, 0);
+        getLogger().info("Found " + found + " existing region entries. Pending unique chunks: " + queued.size()
+                + ". Processing continues in small slices; player-loaded chunks have priority.");
+        Bukkit.getScheduler().runTaskTimer(this, this::processTick, 1L, 1L);
     }
 
-    private void processBatch(World world, Queue<ChunkPos> queue, int total, int done) {
-        int processed = 0;
-        while (processed < chunksPerTick && !queue.isEmpty()) {
-            ChunkPos pos = queue.remove();
-            try {
-                if (world.isChunkGenerated(pos.x, pos.z)) {
-                    var chunk = world.getChunkAt(pos.x, pos.z, false);
-                    if (chunk != null) {
-                        for (int x = 0; x < 16; x++) {
-                            for (int z = 0; z < 16; z++) {
-                                int blockX = (pos.x << 4) + x;
-                                int blockZ = (pos.z << 4) + z;
-                                world.getBlockAt(blockX, BEDROCK_Y, blockZ).setType(Material.BEDROCK, false);
-                                for (int y = DEEPSLATE_START; y <= OLD_BOTTOM; y++) {
-                                    world.getBlockAt(blockX, y, blockZ).setType(Material.DEEPSLATE, false);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable ex) {
-                getLogger().warning("Chunk " + pos.x + "," + pos.z + " failed: " + ex.getMessage());
-            }
-            processed++;
-            done++;
+    private void enqueue(ChunkPos pos, boolean prioritize) {
+        long key = chunkKey(pos.x, pos.z);
+        if (!queued.add(key)) return;
+        if (prioritize) {
+            // New player-loaded chunks jump ahead of the historical backlog.
+            if (queue instanceof ArrayDeque<ChunkPos> deque) deque.addFirst(pos);
+            else queue.add(pos);
+        } else {
+            queue.add(pos);
+        }
+        totalQueued++;
+    }
+
+    private void processTick() {
+        World world = Bukkit.getWorld(targetWorldName);
+        if (world == null) return;
+
+        if (activeTask == null) {
+            ChunkPos next = queue.poll();
+            if (next == null) return;
+            activeTask = new ChunkTask(next);
         }
 
-        if (queue.isEmpty()) {
-            world.save();
-            getLogger().info("Migration complete: " + done + "/" + total
-                    + " existing region entries processed. Y=-164 is bedrock; Y=-163..-64 is 100 deepslate layers; Y>=-63 was not modified.");
-        } else {
-            int nextDone = done;
-            Bukkit.getScheduler().runTaskLater(this, () -> processBatch(world, queue, total, nextDone), 1L);
+        Chunk chunk;
+        try {
+            if (!world.isChunkGenerated(activeTask.pos.x, activeTask.pos.z)) {
+                finishActive();
+                return;
+            }
+            chunk = world.getChunkAt(activeTask.pos.x, activeTask.pos.z, false);
+            if (chunk == null) {
+                finishActive();
+                return;
+            }
+
+            // Bedrock at -164 is outside the old world height, so it is a
+            // reliable migration marker. Verify three points to recover safely
+            // from an interrupted/partially processed chunk.
+            if (isAlreadyMigrated(chunk)) {
+                finishActive();
+                return;
+            }
+
+            if (!activeTask.bedrockDone) {
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        chunk.getBlock(x, BEDROCK_Y, z).setType(Material.BEDROCK, false);
+                    }
+                }
+                activeTask.bedrockDone = true;
+            }
+
+            int endY = Math.min(DEEPSLATE_END, activeTask.nextY + LAYERS_PER_TICK - 1);
+            for (int y = activeTask.nextY; y <= endY; y++) {
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        chunk.getBlock(x, y, z).setType(Material.DEEPSLATE, false);
+                    }
+                }
+            }
+            activeTask.nextY = endY + 1;
+
+            if (activeTask.nextY > DEEPSLATE_END) {
+                finishActive();
+                if (completed % 100 == 0) {
+                    getLogger().info("Migration progress: " + completed + " chunks completed; "
+                            + queue.size() + " waiting.");
+                }
+            }
+        } catch (Throwable ex) {
+            getLogger().severe("Chunk " + activeTask.pos.x + "," + activeTask.pos.z
+                    + " migration slice failed; it will be retried: " + ex.getMessage());
+            // Keep the task and cursor so a transient failure does not silently
+            // discard the chunk or stop the complete migration queue.
+        }
+    }
+
+    private boolean isAlreadyMigrated(Chunk chunk) {
+        return chunk.getBlock(0, BEDROCK_Y, 0).getType() == Material.BEDROCK
+                && chunk.getBlock(0, DEEPSLATE_START, 0).getType() == Material.DEEPSLATE
+                && chunk.getBlock(0, DEEPSLATE_END, 0).getType() == Material.DEEPSLATE;
+    }
+
+    private void finishActive() {
+        if (activeTask == null) return;
+        queued.remove(chunkKey(activeTask.pos.x, activeTask.pos.z));
+        completed++;
+        activeTask = null;
+    }
+
+    private static long chunkKey(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xffffffffL);
+    }
+
+    private static final class ChunkTask {
+        private final ChunkPos pos;
+        private int nextY = DEEPSLATE_START;
+        private boolean bedrockDone;
+
+        private ChunkTask(ChunkPos pos) {
+            this.pos = pos;
         }
     }
 
