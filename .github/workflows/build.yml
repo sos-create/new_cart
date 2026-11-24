@@ -69,9 +69,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p smoke-paper
-          curl --fail --location --retry 3 \
-            "https://api.papermc.io/v2/projects/paper/versions/1.21.4/builds/232/downloads/paper-1.21.4-232.jar" \
-            --output smoke-paper/paper.jar
+          PAPER_URL="$(curl --fail --silent --show-error --retry 3 \
+            -H 'User-Agent: NewCart-CI/1.0 (GitHub Actions)' \
+            "https://fill.papermc.io/v3/projects/paper/versions/1.21.4/builds/232" \
+            | jq -r '.downloads["server:default"].url')"
+          test -n "$PAPER_URL"
+          test "$PAPER_URL" != "null"
+          curl --fail --location --retry 3 "$PAPER_URL" --output smoke-paper/paper.jar
+          test "$(stat -c%s smoke-paper/paper.jar)" -gt 40000000
           cd smoke-paper
           printf 'eula=true\n' > eula.txt
           cat > server.properties <<'PROPERTIES'
