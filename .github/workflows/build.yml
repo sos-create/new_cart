@@ -117,7 +117,12 @@ jobs:
             fi
             if [ -n "$commands_file" ]; then
               while IFS= read -r command; do
-                [ -z "$command" ] || echo "$command" >&3
+                [ -z "$command" ] && continue
+                if [[ "$command" == WAIT:* ]]; then
+                  sleep "${command#WAIT:}"
+                else
+                  echo "$command" >&3
+                fi
               done < "$commands_file"
               sleep 3
             fi
@@ -148,12 +153,13 @@ jobs:
           cp ../build/libs/NewCart-1.0.5.jar plugins/
           # Second boot proves migration of the already-existing 1.21.4 world.
           cat > verify-world-commands.txt <<'COMMANDS'
+          WAIT:8
           execute in minecraft:overworld if block 0 -164 0 minecraft:bedrock run say BEDROCK_OK
           execute in minecraft:overworld if block 0 -163 0 minecraft:deepslate run say DEEPSLATE_BOTTOM_OK
           execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
           execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
           COMMANDS
-          run_server newcart-start.log "Chunk migration finished: 0,0" verify-world-commands.txt
+          run_server newcart-start.log "NewCart 1.0.5 enabled" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
           grep -q "Chunk migration finished: 0,0" newcart-start.log
