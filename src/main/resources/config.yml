@@ -2,8 +2,8 @@
 # The world must be the already existing Paper Overworld folder name (usually "world").
 new-cart:
   world: world
-  min-y: -164
-  height: 484
+  min-y: -160
+  height: 480
   logical-height: 384
   cloud-height: default
   dimension-type: overworld
