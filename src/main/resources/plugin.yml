@@ -3,5 +3,5 @@ version: ${version}
 main: ru.soscreate.newcart.NewCartPlugin
 api-version: '1.21'
 load: STARTUP
-description: Extends an existing Overworld downward by 100 blocks; includes its height engine.
+description: Extends an existing Overworld downward with a valid 480-block dimension; includes its height engine.
 authors: [sos-create]
