@@ -8,5 +8,5 @@ new-cart:
   cloud-height: default
   dimension-type: overworld
 
-# Existing region chunks are processed gradually to avoid a large one-tick spike.
-chunks-per-tick: 1
+# Existing and newly loaded chunks are processed in small vertical slices.
+# The plugin changes two deepslate layers per server tick to avoid freezes.
