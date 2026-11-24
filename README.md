@@ -22,7 +22,8 @@ The plugin scans existing Overworld region files and incrementally processes onl
 1. Stop the server and make a complete backup of the world folder.
 2. Install a CustomWorldHeight release compatible with Paper 1.21.4.
 3. Put NewCart into the plugins folder.
-4. Start the server and watch the console for the registered height and migration-complete messages.
+4. Start the server once. On its first start, CustomWorldHeight creates its config and disables itself; NewCart will also stay disabled because this dependency is not yet active.
+5. Stop and start the server again. CustomWorldHeight will now enable, then NewCart will register the expanded height and begin filling the new lower layer. Watch the console for the migration-complete message.
 
 Test on a copy first. A dimension-height change affects world metadata and chunk storage. This initial release targets the standard vanilla Overworld with min Y=-64 and max Y=319.
 
