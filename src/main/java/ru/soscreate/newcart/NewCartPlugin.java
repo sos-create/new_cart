@@ -16,6 +16,7 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Queue;
@@ -35,7 +36,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private static final int LAYERS_PER_TICK = 2;
 
     private String targetWorldName;
-    private final Queue<ChunkPos> queue = new ArrayDeque<>();
+    private final Deque<ChunkPos> queue = new ArrayDeque<>();
     private final Set<Long> queued = new HashSet<>();
     private ChunkTask activeTask;
     private long totalQueued;
@@ -174,10 +175,9 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         migrationFinished = false;
         if (prioritize) {
             // New player-loaded chunks jump ahead of the historical backlog.
-            if (queue instanceof ArrayDeque<ChunkPos> deque) deque.addFirst(pos);
-            else queue.add(pos);
+            queue.addFirst(pos);
         } else {
-            queue.add(pos);
+            queue.addLast(pos);
         }
         totalQueued++;
     }
