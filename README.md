@@ -12,8 +12,8 @@ Keep CustomWorldHeight installed after migration. NewCart declares it as a hard 
 ## Block layout
 
 - Y=-164: bedrock
-- Y=-163 through Y=-65: deepslate
-- Y=-64 and above: left untouched
+- Y=-163 through Y=-64: exactly 100 layers of deepslate (the old bedrock floor at -64 is replaced)
+- Y=-63 and above: left untouched
 
 The plugin scans existing Overworld region files and incrementally processes only chunks already stored there. It does not regenerate existing chunks.
 
