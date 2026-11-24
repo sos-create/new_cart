@@ -133,6 +133,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         getLogger().info("World height verified: minY=-176 maxY=320. Scanning existing region chunks; "
                 + "newly loaded chunks are also captured automatically.");
+        Bukkit.getScheduler().runTaskTimer(this, this::processTick, 1L, 1L);
         Path regionDir = world.getWorldFolder().toPath().resolve("region");
         if (!Files.isDirectory(regionDir)) {
             getLogger().warning("No region directory found; waiting for player-loaded chunks.");
@@ -166,7 +167,6 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         getLogger().info("Found " + found + " existing region entries. Pending unique chunks: " + queued.size()
                 + ". Processing continues in small slices; player-loaded chunks have priority.");
-        Bukkit.getScheduler().runTaskTimer(this, this::processTick, 1L, 1L);
     }
 
     private void enqueue(ChunkPos pos, boolean prioritize) {
