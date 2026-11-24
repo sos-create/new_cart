@@ -203,10 +203,9 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         Chunk chunk;
         try {
-            if (!world.isChunkGenerated(activeTask.pos.x, activeTask.pos.z)) {
-                finishActive();
-                return;
-            }
+            // Queue entries come either from an actual ChunkLoadEvent or a non-empty
+            // Anvil region location-table entry. Do not gate on isChunkGenerated():
+            // some Paper builds report false for valid region-backed chunks during startup.
             chunk = world.getChunkAt(activeTask.pos.x, activeTask.pos.z, false);
             if (chunk == null) {
                 finishActive();
