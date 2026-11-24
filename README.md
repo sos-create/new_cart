@@ -10,10 +10,10 @@ Default world folder name: `world`. Change `new-cart.world` in the generated New
 
 ## World layout
 
-- New minimum Y: **-164**
+- New minimum Y: **-160**
 - Maximum Y: **319** (unchanged)
-- Y=-164: bedrock
-- Y=-163 through Y=-64: exactly 100 layers of deepslate
+- Y=-160: bedrock
+- Y=-159 through Y=-64: 96 layers of deepslate
 - Y=-63 and above: untouched
 
 Only chunks already present in the world's `region/*.mca` files are processed. Chunks are handled gradually using `chunks-per-tick: 1`; new chunks remain under normal Paper world generation.
@@ -30,4 +30,4 @@ If upgrading from the previous two-JAR NewCart package, the old NewCart config i
 
 ## Safety notes
 
-This is a dimension-height change, not merely a block edit. Test on a copy first. Do not lower the world height after expanding it. The plugin aborts the block migration if the active world's reported height is not minY=-164 and maxY=320. The GitHub build verifies packaging and class inclusion; only a live Paper server test can confirm runtime behavior on a particular server.
+This is a dimension-height change, not merely a block edit. Test on a copy first. Do not lower the world height after expanding it. The plugin aborts the block migration if the active world's reported height is not minY=-160 and maxY=320. The GitHub build verifies packaging and class inclusion; only a live Paper server test can confirm runtime behavior on a particular server.
