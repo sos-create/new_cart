@@ -3,7 +3,5 @@ version: ${version}
 main: ru.soscreate.newcart.NewCartPlugin
 api-version: '1.21'
 load: STARTUP
-depend:
-  - CustomWorldHeight
-description: Extends the existing Overworld downward by 100 blocks.
+description: Extends an existing Overworld downward by 100 blocks; includes its height engine.
 authors: [sos-create]
