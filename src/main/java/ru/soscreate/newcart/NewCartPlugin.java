@@ -105,7 +105,7 @@ public final class NewCartPlugin extends JavaPlugin {
                                 int bx = (pos.x << 4) + x;
                                 int bz = (pos.z << 4) + z;
                                 world.getBlockAt(bx, NEW_BOTTOM, bz).setType(Material.BEDROCK, false);
-                                for (int y = NEW_BOTTOM + 1; y < OLD_BOTTOM; y++) {
+                                for (int y = NEW_BOTTOM + 1; y <= OLD_BOTTOM; y++) {
                                     world.getBlockAt(bx, y, bz).setType(Material.DEEPSLATE, false);
                                 }
                             }
@@ -120,7 +120,7 @@ public final class NewCartPlugin extends JavaPlugin {
         }
         if (queue.isEmpty()) {
             world.save();
-            getLogger().info("Migration complete: " + done + "/" + total + " region entries processed. Blocks at Y >= -64 were not touched.");
+            getLogger().info("Migration complete: " + done + "/" + total + " region entries processed. Only the old bedrock layer at Y=-64 was replaced; blocks at Y >= -63 were not touched.");
         } else {
             int nextDone = done;
             Bukkit.getScheduler().runTaskLater(this, () -> processBatch(world, queue, total, nextDone), 1L);
