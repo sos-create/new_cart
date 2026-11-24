@@ -75,6 +75,12 @@ public final class NewCartPlugin extends CustomWorldHeight {
 
     @Override
     public void onEnable() {
+        String minecraftVersion = Bukkit.getMinecraftVersion();
+        if (!"1.21.4".equals(minecraftVersion)) {
+            getLogger().severe("This build is made specifically for Paper 1.21.4; detected Minecraft " + minecraftVersion + ". Disabling safely.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         // Registers the embedded CustomWorldHeight world-init handler.
         super.onEnable();
 
@@ -103,6 +109,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
             return;
         }
 
+        getLogger().info("World height verified: minY=-176 maxY=320. Starting existing-chunk migration.");
         Path regionDir = world.getWorldFolder().toPath().resolve("region");
         if (!Files.isDirectory(regionDir)) {
             getLogger().warning("No region directory found; no existing chunks to migrate.");
