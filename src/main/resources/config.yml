@@ -1,0 +1,4 @@
+world: world
+old-bottom-y: -64
+added-depth: 100
+chunks-per-tick: 1
