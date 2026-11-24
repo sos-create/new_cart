@@ -153,10 +153,10 @@ jobs:
           execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
           execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
           COMMANDS
-          run_server newcart-start.log "Migration complete" verify-world-commands.txt
+          run_server newcart-start.log "Chunk migration finished: 0,0" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
-          grep -q "Migration complete: [1-9][0-9]* chunks completed; waiting for newly loaded chunks." newcart-start.log
+          grep -q "Chunk migration finished: 0,0" newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
           grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
           grep -q "DEEPSLATE_TOP_OK" newcart-start.log
