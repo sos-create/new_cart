@@ -22,7 +22,7 @@ Only chunks already present in the world's `region/*.mca` files are processed. C
 
 1. Stop the server and make a complete backup of the existing world folder.
 2. Remove the old separate `CustomWorldHeight.jar` and old `NewCart-*.jar` from `plugins` to avoid duplicate height handlers.
-3. Put only the new `NewCart-1.0.3.jar` in `plugins`.
+3. Put only the new `NewCart-1.0.4.jar` in `plugins`.
 4. Start the server. NewCart creates its config automatically on first startup and initializes the height engine before the world loads.
 5. Check the console for NewCart's height and migration messages. Wait for `Migration complete` before considering the block migration finished.
 
