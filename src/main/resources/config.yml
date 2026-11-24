@@ -1,4 +1,12 @@
-world: world
-old-bottom-y: -64
-added-depth: 100
+# Single-JAR NewCart configuration.
+# The world must be the already existing Paper Overworld folder name (usually "world").
+new-cart:
+  world: world
+  min-y: -164
+  height: 484
+  logical-height: 384
+  cloud-height: default
+  dimension-type: overworld
+
+# Existing region chunks are processed gradually to avoid a large one-tick spike.
 chunks-per-tick: 1
