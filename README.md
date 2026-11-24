@@ -1,36 +1,33 @@
 # NewCart — Paper 1.21.4
 
-NewCart expands the existing standard Overworld downward by exactly 100 blocks. The expected original vanilla lower limit is Y=-64; the new limit is Y=-164, while the upper limit remains Y=319.
+NewCart is a **single self-contained Paper plugin JAR**. The CustomWorldHeight engine is embedded inside NewCart; no second plugin is required.
 
-## Included dependency
+## Existing worlds
 
-The complete release bundle contains two plugins:
-- `NewCart-1.0.0.jar`
-- `CustomWorldHeight.jar` (Lumine1909, version 1.5.1; release declares Minecraft 1.20.5–1.21.7 support, including Paper 1.21.4)
+NewCart targets an already created, standard Paper 1.21.4 Overworld. You do not need to create a new world, reset the world, or regenerate existing chunks. The height engine is initialized during the server's startup lifecycle, before the world is initialized, and applies the expanded dimension to the existing world.
 
-CustomWorldHeight is required because Paper's Bukkit API does not expose a supported way for NewCart to change the world's dimension height by itself. Keep both JARs in the server's `plugins` folder.
+Default world folder name: `world`. Change `new-cart.world` in the generated NewCart config if your Overworld folder has another name.
 
-## Block layout
+## World layout
 
+- New minimum Y: **-164**
+- Maximum Y: **319** (unchanged)
 - Y=-164: bedrock
-- Y=-163 through Y=-64: exactly 100 layers of deepslate (the old bedrock floor at -64 is replaced)
-- Y=-63 and above: left untouched
+- Y=-163 through Y=-64: exactly 100 layers of deepslate
+- Y=-63 and above: untouched
 
-The plugin scans existing Overworld region files and processes only chunks already stored there. It does not generate or regenerate chunks.
+Only chunks already present in the world's `region/*.mca` files are processed. Chunks are handled gradually using `chunks-per-tick: 1`; new chunks remain under normal Paper world generation.
 
 ## Installation
 
-1. Stop the server and make a complete backup of the entire world folder.
-2. Extract the release ZIP.
-3. Copy **both** JAR files from the included `plugins` folder into the server's `plugins` folder. Do not rename either JAR.
-4. Start the server once. On its first start, CustomWorldHeight creates its config and disables itself; NewCart cannot load until the dependency is enabled.
-5. Stop the server and start it again. Confirm the console shows CustomWorldHeight enabled and NewCart enabled. NewCart will register the expanded height and begin processing existing chunks.
-6. Wait for NewCart's `Migration complete` console message before treating the migration as finished.
+1. Stop the server and make a complete backup of the existing world folder.
+2. Remove the old separate `CustomWorldHeight.jar` and old `NewCart-*.jar` from `plugins` to avoid duplicate height handlers.
+3. Put only the new `NewCart-1.0.1.jar` in `plugins`.
+4. Start the server. On a first installation, NewCart creates its config and asks for a restart; restart once so the height engine initializes before the existing world loads.
+5. Check the console for NewCart's height and migration messages. Wait for `Migration complete` before considering the block migration finished.
 
-If Paper reports `Unknown/missing dependency [CustomWorldHeight]`, the CustomWorldHeight JAR is not installed in the active server's `plugins` directory, or its first-start setup has not completed. Check that the file is named `CustomWorldHeight.jar` and that the server was restarted after its config was generated.
+If upgrading from the previous two-JAR NewCart package, the old NewCart config is backed up as `plugins/NewCart/config.yml.pre-single-jar.bak` and migrated automatically. Keep the world backup until the server has been checked in-game.
 
-Test on a copy first. A dimension-height change affects world metadata and chunk storage. This build targets the standard vanilla Overworld with min Y=-64 and max Y=319. It stops rather than editing chunks if the active world height does not match the expected values.
+## Safety notes
 
-## Build
-
-Java 21: `gradle clean build`. The GitHub Actions release bundle additionally includes the compatible CustomWorldHeight dependency.
+This is a dimension-height change, not merely a block edit. Test on a copy first. Do not lower the world height after expanding it. The plugin aborts the block migration if the active world's reported height is not minY=-164 and maxY=320. The GitHub build verifies packaging and class inclusion; only a live Paper server test can confirm runtime behavior on a particular server.
