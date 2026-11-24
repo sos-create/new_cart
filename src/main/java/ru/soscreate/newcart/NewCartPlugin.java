@@ -19,8 +19,8 @@ import java.util.regex.Pattern;
 public final class NewCartPlugin extends CustomWorldHeight {
     private static final Pattern REGION_NAME = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
     private static final int OLD_BOTTOM = -64;
-    private static final int NEW_BOTTOM = -164;
-    private static final int NEW_HEIGHT = 484;
+    private static final int NEW_BOTTOM = -160;
+    private static final int NEW_HEIGHT = 480;
     private int chunksPerTick;
 
     @Override
@@ -36,25 +36,35 @@ public final class NewCartPlugin extends CustomWorldHeight {
         File configFile = new File(folder, "config.yml");
         if (!configFile.isFile()) return;
 
-        YamlConfiguration old = YamlConfiguration.loadConfiguration(configFile);
-        if (old.contains("new-cart.world")) return;
+        YamlConfiguration current = YamlConfiguration.loadConfiguration(configFile);
+        boolean legacyFormat = !current.contains("new-cart.world");
+        String worldName = legacyFormat
+                ? current.getString("world", "world")
+                : current.getString("new-cart.world", "world");
 
-        String worldName = old.getString("world", "world");
-        File backup = new File(folder, "config.yml.pre-single-jar.bak");
+        boolean invalidHeight = current.getInt("new-cart.min-y", NEW_BOTTOM) != NEW_BOTTOM
+                || current.getInt("new-cart.height", NEW_HEIGHT) != NEW_HEIGHT;
+        if (!legacyFormat && !invalidHeight) return;
+
+        File backup = new File(folder, "config.yml.pre-height-fix.bak");
         try {
             if (!backup.exists()) Files.copy(configFile.toPath(), backup.toPath());
-            YamlConfiguration migrated = new YamlConfiguration();
-            migrated.set("new-cart.world", worldName);
-            migrated.set("new-cart.min-y", NEW_BOTTOM);
-            migrated.set("new-cart.height", NEW_HEIGHT);
-            migrated.set("new-cart.logical-height", 384);
-            migrated.set("new-cart.cloud-height", "default");
-            migrated.set("new-cart.dimension-type", "overworld");
-            migrated.save(configFile);
-            getLogger().info("Migrated old NewCart config; backup saved as config.yml.pre-single-jar.bak");
+            if (legacyFormat) current = new YamlConfiguration();
+
+            // Minecraft requires dimension height to be a multiple of 16.
+            // Keep the existing top at Y=319 and use the nearest valid bottom: Y=-160.
+            current.set("new-cart.world", worldName);
+            current.set("new-cart.min-y", NEW_BOTTOM);
+            current.set("new-cart.height", NEW_HEIGHT);
+            current.set("new-cart.logical-height", 384);
+            current.set("new-cart.cloud-height", "default");
+            current.set("new-cart.dimension-type", "overworld");
+            current.save(configFile);
+            getLogger().warning("Corrected invalid world-height settings to min-y=-160 and height=480. "
+                    + "Previous config backed up as config.yml.pre-height-fix.bak");
         } catch (IOException ex) {
-            getLogger().severe("Could not migrate config.yml: " + ex.getMessage());
-            throw new IllegalStateException("NewCart configuration migration failed; no world chunks were changed.", ex);
+            getLogger().severe("Could not correct config.yml: " + ex.getMessage());
+            throw new IllegalStateException("NewCart configuration correction failed; no world chunks were changed.", ex);
         }
     }
 
@@ -67,12 +77,12 @@ public final class NewCartPlugin extends CustomWorldHeight {
         chunksPerTick = Math.max(1, getConfig().getInt("chunks-per-tick", 1));
         if (getConfig().getInt("new-cart.min-y", NEW_BOTTOM) != NEW_BOTTOM
                 || getConfig().getInt("new-cart.height", NEW_HEIGHT) != NEW_HEIGHT) {
-            getLogger().severe("This build requires min-y=-164 and height=484. No chunks were changed.");
+            getLogger().severe("This build requires min-y=-160 and height=480. No chunks were changed.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         getLogger().info("NewCart is running as a single plugin. Target world: " + worldName
-                + "; minY=-164; maxY=319; height=484.");
+                + "; minY=-160; maxY=319; height=480.");
         Bukkit.getScheduler().runTaskLater(this, () -> beginMigration(worldName), 40L);
     }
 
@@ -117,7 +127,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
         }
 
         int total = queue.size();
-        getLogger().info("Found " + total + " existing chunks. Adding the new 100-block layer incrementally.");
+        getLogger().info("Found " + total + " existing chunks. Adding the new 96-block layer incrementally.");
         processBatch(world, queue, total, 0);
     }
 
@@ -151,7 +161,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
         if (queue.isEmpty()) {
             world.save();
             getLogger().info("Migration complete: " + done + "/" + total
-                    + " existing region entries processed. Y=-164 is bedrock; Y=-163..-64 is deepslate; Y>=-63 was not modified.");
+                    + " existing region entries processed. Y=-160 is bedrock; Y=-159..-64 is deepslate; Y>=-63 was not modified.");
         } else {
             int nextDone = done;
             Bukkit.getScheduler().runTaskLater(this, () -> processBatch(world, queue, total, nextDone), 1L);
