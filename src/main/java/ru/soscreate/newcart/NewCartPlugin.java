@@ -137,6 +137,10 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         for (Chunk loaded : world.getLoadedChunks()) {
             enqueue(new ChunkPos(loaded.getX(), loaded.getZ()), true);
         }
+        // Finish the world-spawn chunk first on startup; once players join,
+        // their newly loaded chunks are promoted ahead of the remaining queue.
+        enqueue(new ChunkPos(world.getSpawnLocation().getBlockX() >> 4,
+                world.getSpawnLocation().getBlockZ() >> 4), true);
         Path regionDir = world.getWorldFolder().toPath().resolve("region");
         if (!Files.isDirectory(regionDir)) {
             getLogger().warning("No region directory found; waiting for player-loaded chunks.");
