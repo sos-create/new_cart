@@ -39,6 +39,54 @@ jobs:
           jar tf libs/CustomWorldHeight.jar | grep -q 'plugin.yml'
       - name: Build one self-contained NewCart plugin
         run: gradle --no-daemon clean build
+      - name: Verify valid Paper 1.21.4 dimension settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^  min-y: -160        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="$(find build/libs -maxdepth 1 -name 'NewCart-*.jar' -print -quit)"
+          test -n "$JAR"
+          jar tf "$JAR" | grep -q 'ru/soscreate/newcart/NewCartPlugin.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/data/DataHandler_1_21_3.class'
+          test "$(jar tf "$JAR" | grep -c '^plugin.yml$')" -eq 1
+          ! jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class$' || true
+          mkdir -p dist/plugins
+          cp "$JAR" dist/plugins/
+          (cd dist && zip -r ../NewCart-Paper-1.21.4-Single-Plugin.zip plugins)
+          unzip -t NewCart-Paper-1.21.4-Single-Plugin.zip
+      - name: Upload single-plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: NewCart-Paper-1.21.4-Single-Plugin
+          path: NewCart-Paper-1.21.4-Single-Plugin.zip
+          if-no-files-found: error
+ src/main/resources/config.yml
+          grep -q '^  height: 480        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="$(find build/libs -maxdepth 1 -name 'NewCart-*.jar' -print -quit)"
+          test -n "$JAR"
+          jar tf "$JAR" | grep -q 'ru/soscreate/newcart/NewCartPlugin.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/data/DataHandler_1_21_3.class'
+          test "$(jar tf "$JAR" | grep -c '^plugin.yml$')" -eq 1
+          ! jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class$' || true
+          mkdir -p dist/plugins
+          cp "$JAR" dist/plugins/
+          (cd dist && zip -r ../NewCart-Paper-1.21.4-Single-Plugin.zip plugins)
+          unzip -t NewCart-Paper-1.21.4-Single-Plugin.zip
+      - name: Upload single-plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: NewCart-Paper-1.21.4-Single-Plugin
+          path: NewCart-Paper-1.21.4-Single-Plugin.zip
+          if-no-files-found: error
+ src/main/resources/config.yml
+          grep -q 'NEW_BOTTOM = -160' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'NEW_HEIGHT = 480' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
       - name: Verify single-plugin output
         shell: bash
         run: |
