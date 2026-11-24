@@ -3,5 +3,5 @@ version: ${version}
 main: ru.soscreate.newcart.NewCartPlugin
 api-version: '1.21'
 load: STARTUP
-description: Extends an existing Overworld downward with a 100 deepslate layers below an existing Paper 1.21.4 Overworld; includes its height engine.
+description: Extends an existing Overworld downward with 100 deepslate layers below an existing Paper 1.21.4 Overworld; includes its height engine.
 authors: [sos-create]
