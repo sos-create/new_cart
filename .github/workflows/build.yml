@@ -116,7 +116,7 @@ jobs:
               while IFS= read -r command; do
                 [ -z "$command" ] || echo "$command" >&3
               done < "$commands_file"
-              sleep 2
+              sleep 3
             fi
             echo stop >&3
             exec 3>&-
@@ -132,12 +132,15 @@ jobs:
           }
           # First boot creates a vanilla Paper 1.21.4 world and saves test blocks.
           cat > create-world-commands.txt <<'COMMANDS'
+          execute in minecraft:overworld run forceload add 0 0
           execute in minecraft:overworld run setblock 0 -63 0 minecraft:gold_block
           execute in minecraft:overworld run setblock 0 -60 0 minecraft:stone
           COMMANDS
           run_server first-start.log "Done (" create-world-commands.txt
+          cat first-start.log
           test -d world
           test -d world/region
+          test -s world/region/r.0.0.mca
           mkdir -p plugins
           cp ../build/libs/NewCart-1.0.4.jar plugins/
           # Second boot proves migration of the already-existing 1.21.4 world.
@@ -148,6 +151,7 @@ jobs:
           execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
           COMMANDS
           run_server newcart-start.log "Migration complete" verify-world-commands.txt
+          cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
           grep -q "Migration complete: [1-9][0-9]*/[1-9][0-9]* existing region entries processed" newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
