@@ -40,6 +40,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private ChunkTask activeTask;
     private long totalQueued;
     private long completed;
+    private boolean migrationFinished;
 
     @Override
     public void onLoad() {
@@ -170,6 +171,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private void enqueue(ChunkPos pos, boolean prioritize) {
         long key = chunkKey(pos.x, pos.z);
         if (!queued.add(key)) return;
+        migrationFinished = false;
         if (prioritize) {
             // New player-loaded chunks jump ahead of the historical backlog.
             if (queue instanceof ArrayDeque<ChunkPos> deque) deque.addFirst(pos);
@@ -186,7 +188,13 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         if (activeTask == null) {
             ChunkPos next = queue.poll();
-            if (next == null) return;
+            if (next == null) {
+                if (!migrationFinished) {
+                    migrationFinished = true;
+                    getLogger().info("Migration complete: " + completed + " chunks completed; waiting for newly loaded chunks.");
+                }
+                return;
+            }
             activeTask = new ChunkTask(next);
         }
 
