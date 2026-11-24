@@ -238,7 +238,9 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
             activeTask.nextY = endY + 1;
 
             if (activeTask.nextY > DEEPSLATE_END) {
+                ChunkPos finishedPos = activeTask.pos;
                 finishActive();
+                getLogger().info("Chunk migration finished: " + finishedPos.x + "," + finishedPos.z);
                 if (completed % 100 == 0) {
                     getLogger().info("Migration progress: " + completed + " chunks completed; "
                             + queue.size() + " waiting.");
