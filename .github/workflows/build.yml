@@ -48,6 +48,9 @@ jobs:
           grep -q 'BEDROCK_Y = -164' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'DEEPSLATE_START = -163' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'CustomWorldHeight.plugin = this' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'ChunkLoadEvent' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'LAYERS_PER_TICK = 2' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'Migration complete:' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
       - name: Build one self-contained NewCart plugin
         run: gradle --no-daemon clean build
       - name: Verify single-plugin output
@@ -142,7 +145,7 @@ jobs:
           test -d world/region
           test -s world/region/r.0.0.mca
           mkdir -p plugins
-          cp ../build/libs/NewCart-1.0.4.jar plugins/
+          cp ../build/libs/NewCart-1.0.5.jar plugins/
           # Second boot proves migration of the already-existing 1.21.4 world.
           cat > verify-world-commands.txt <<'COMMANDS'
           execute in minecraft:overworld if block 0 -164 0 minecraft:bedrock run say BEDROCK_OK
