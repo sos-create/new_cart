@@ -19,16 +19,20 @@ import java.util.regex.Pattern;
 public final class NewCartPlugin extends CustomWorldHeight {
     private static final Pattern REGION_NAME = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
     private static final int OLD_BOTTOM = -64;
-    private static final int NEW_BOTTOM = -160;
-    private static final int NEW_HEIGHT = 480;
+    private static final int NEW_BOTTOM = -176;
+    private static final int NEW_HEIGHT = 496;
+    private static final int BEDROCK_Y = -164;
+    private static final int DEEPSLATE_START = -163;
     private int chunksPerTick;
 
     @Override
     public void onLoad() {
         migrateOldConfigIfNeeded();
-        // CustomWorldHeight's lifecycle is embedded into this plugin.
-        // Its onLoad initializes the height engine before any world is loaded.
-        super.onLoad();
+        // Initialize the embedded engine without its first-run self-disable/restart cycle.
+        // The parent onLoad only sets this static plugin reference and disables itself
+        // when config.yml is absent; we create the default config here instead.
+        saveDefaultConfig();
+        CustomWorldHeight.plugin = this;
     }
 
     private void migrateOldConfigIfNeeded() {
@@ -51,8 +55,9 @@ public final class NewCartPlugin extends CustomWorldHeight {
             if (!backup.exists()) Files.copy(configFile.toPath(), backup.toPath());
             if (legacyFormat) current = new YamlConfiguration();
 
-            // Minecraft requires dimension height to be a multiple of 16.
-            // Keep the existing top at Y=319 and use the nearest valid bottom: Y=-160.
+            // Paper/Minecraft 1.21.4 requires minY and height to align to 16-block sections.
+            // minY=-176 and height=496 keep maxY=319 while preserving the requested
+            // 100 deepslate layers (-163..-64) and bedrock at -164.
             current.set("new-cart.world", worldName);
             current.set("new-cart.min-y", NEW_BOTTOM);
             current.set("new-cart.height", NEW_HEIGHT);
@@ -60,7 +65,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
             current.set("new-cart.cloud-height", "default");
             current.set("new-cart.dimension-type", "overworld");
             current.save(configFile);
-            getLogger().warning("Corrected invalid world-height settings to min-y=-160 and height=480. "
+            getLogger().warning("Corrected world-height settings to min-y=-176 and height=496. "
                     + "Previous config backed up as config.yml.pre-height-fix.bak");
         } catch (IOException ex) {
             getLogger().severe("Could not correct config.yml: " + ex.getMessage());
@@ -77,12 +82,12 @@ public final class NewCartPlugin extends CustomWorldHeight {
         chunksPerTick = Math.max(1, getConfig().getInt("chunks-per-tick", 1));
         if (getConfig().getInt("new-cart.min-y", NEW_BOTTOM) != NEW_BOTTOM
                 || getConfig().getInt("new-cart.height", NEW_HEIGHT) != NEW_HEIGHT) {
-            getLogger().severe("This build requires min-y=-160 and height=480. No chunks were changed.");
+            getLogger().severe("This build requires min-y=-176 and height=496. No chunks were changed.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         getLogger().info("NewCart is running as a single plugin. Target world: " + worldName
-                + "; minY=-160; maxY=319; height=480.");
+                + "; minY=-176; maxY=319; height=496.");
         Bukkit.getScheduler().runTaskLater(this, () -> beginMigration(worldName), 40L);
     }
 
@@ -143,8 +148,8 @@ public final class NewCartPlugin extends CustomWorldHeight {
                             for (int z = 0; z < 16; z++) {
                                 int blockX = (pos.x << 4) + x;
                                 int blockZ = (pos.z << 4) + z;
-                                world.getBlockAt(blockX, NEW_BOTTOM, blockZ).setType(Material.BEDROCK, false);
-                                for (int y = NEW_BOTTOM + 1; y <= OLD_BOTTOM; y++) {
+                                world.getBlockAt(blockX, BEDROCK_Y, blockZ).setType(Material.BEDROCK, false);
+                                for (int y = DEEPSLATE_START; y <= OLD_BOTTOM; y++) {
                                     world.getBlockAt(blockX, y, blockZ).setType(Material.DEEPSLATE, false);
                                 }
                             }
@@ -161,7 +166,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
         if (queue.isEmpty()) {
             world.save();
             getLogger().info("Migration complete: " + done + "/" + total
-                    + " existing region entries processed. Y=-160 is bedrock; Y=-159..-64 is deepslate; Y>=-63 was not modified.");
+                    + " existing region entries processed. Y=-164 is bedrock; Y=-163..-64 is 100 deepslate layers; Y>=-63 was not modified.");
         } else {
             int nextDone = done;
             Bukkit.getScheduler().runTaskLater(this, () -> processBatch(world, queue, total, nextDone), 1L);
