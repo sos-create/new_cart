@@ -41,10 +41,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^  min-y: -160$' src/main/resources/config.yml
-          grep -q '^  height: 480$' src/main/resources/config.yml
-          grep -q 'NEW_BOTTOM = -160' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
-          grep -q 'NEW_HEIGHT = 480' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q '^  min-y: -176$' src/main/resources/config.yml
+          grep -q '^  height: 496$' src/main/resources/config.yml
+          grep -q 'NEW_BOTTOM = -176' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'NEW_HEIGHT = 496' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
       - name: Build one self-contained NewCart plugin
         run: gradle --no-daemon clean build
       - name: Verify single-plugin output
