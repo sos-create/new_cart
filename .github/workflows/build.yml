@@ -141,6 +141,7 @@ jobs:
           # First boot creates a vanilla Paper 1.21.4 world and saves test blocks.
           cat > create-world-commands.txt <<'COMMANDS'
           execute in minecraft:overworld run forceload add 0 0
+          execute in minecraft:overworld run setworldspawn 0 64 0
           execute in minecraft:overworld run setblock 0 -63 0 minecraft:gold_block
           execute in minecraft:overworld run setblock 0 -60 0 minecraft:stone
           COMMANDS
