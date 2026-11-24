@@ -178,10 +178,27 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
     private void enqueue(ChunkPos pos, boolean prioritize) {
         long key = chunkKey(pos.x, pos.z);
-        if (!queued.add(key)) return;
+
+        // Do not enqueue a second copy of the chunk currently being sliced.
+        if (prioritize && activeTask != null
+                && activeTask.pos.x == pos.x && activeTask.pos.z == pos.z) {
+            return;
+        }
+
+        if (!queued.add(key)) {
+            if (prioritize) {
+                // A player can enter a chunk that is already in the historical
+                // backlog. Move that existing entry to the front instead of
+                // silently ignoring the priority request.
+                queue.removeIf(existing -> existing.x == pos.x && existing.z == pos.z);
+                queue.addFirst(pos);
+                migrationFinished = false;
+            }
+            return;
+        }
+
         migrationFinished = false;
         if (prioritize) {
-            // New player-loaded chunks jump ahead of the historical backlog.
             queue.addFirst(pos);
         } else {
             queue.addLast(pos);
