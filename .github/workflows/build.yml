@@ -1,4 +1,4 @@
-name: Build NewCart
+name: Build NewCart single plugin
 
 on:
   push:
@@ -26,24 +26,37 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
-      - name: Build NewCart plugin
-        run: gradle --no-daemon clean build
-      - name: Assemble complete server plugin package
+      - name: Fetch pinned CustomWorldHeight engine for embedding
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/plugins
-          cp build/libs/NewCart-*.jar dist/plugins/
+          mkdir -p libs
           curl --fail --location --retry 3 \
             "https://github.com/Lumine1909/CustomWorldHeight/releases/download/v1.5.1-build-1/CustomWorldHeight-1.5.1-MC-1.20.5-1.21.7.jar" \
-            --output dist/plugins/CustomWorldHeight.jar
-          test -s dist/plugins/CustomWorldHeight.jar
-          jar tf dist/plugins/CustomWorldHeight.jar | grep -q 'plugin.yml'
-          jar tf dist/plugins/NewCart-*.jar | grep -q 'plugin.yml'
-          (cd dist && zip -r ../NewCart-Paper-1.21.4-Bundle.zip plugins)
-      - name: Upload complete plugin bundle
+            --output libs/CustomWorldHeight.jar
+          test -s libs/CustomWorldHeight.jar
+          jar tf libs/CustomWorldHeight.jar | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class'
+          jar tf libs/CustomWorldHeight.jar | grep -q 'plugin.yml'
+      - name: Build one self-contained NewCart plugin
+        run: gradle --no-daemon clean build
+      - name: Verify single-plugin output
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="$(find build/libs -maxdepth 1 -name 'NewCart-*.jar' -print -quit)"
+          test -n "$JAR"
+          jar tf "$JAR" | grep -q 'ru/soscreate/newcart/NewCartPlugin.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class'
+          jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/data/DataHandler_1_21_3.class'
+          test "$(jar tf "$JAR" | grep -c '^plugin.yml$')" -eq 1
+          ! jar tf "$JAR" | grep -q 'io/github/lumine1909/customworldheight/CustomWorldHeight.class$' || true
+          mkdir -p dist/plugins
+          cp "$JAR" dist/plugins/
+          (cd dist && zip -r ../NewCart-Paper-1.21.4-Single-Plugin.zip plugins)
+          unzip -t NewCart-Paper-1.21.4-Single-Plugin.zip
+      - name: Upload single-plugin package
         uses: actions/upload-artifact@v4
         with:
-          name: NewCart-Paper-1.21.4-Bundle
-          path: NewCart-Paper-1.21.4-Bundle.zip
+          name: NewCart-Paper-1.21.4-Single-Plugin
+          path: NewCart-Paper-1.21.4-Single-Plugin.zip
           if-no-files-found: error
