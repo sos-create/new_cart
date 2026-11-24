@@ -156,7 +156,7 @@ jobs:
           run_server newcart-start.log "Migration complete" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
-          grep -q "Migration complete: [1-9][0-9]*/[1-9][0-9]* existing region entries processed" newcart-start.log
+          grep -q "Migration complete: [1-9][0-9]* chunks completed; waiting for newly loaded chunks." newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
           grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
           grep -q "DEEPSLATE_TOP_OK" newcart-start.log
