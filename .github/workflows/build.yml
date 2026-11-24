@@ -159,7 +159,7 @@ jobs:
           execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
           execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
           COMMANDS
-          run_server newcart-start.log "NewCart 1.0.5 enabled" verify-world-commands.txt
+          run_server newcart-start.log "Done (" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
           grep -q "Chunk migration finished: 0,0" newcart-start.log
