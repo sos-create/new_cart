@@ -86,6 +86,7 @@ jobs:
           run_server() {
             local log_file="$1"
             local expected="$2"
+            local commands_file="${3:-}"
             rm -f server.stdin
             mkfifo server.stdin
             java -Xms512M -Xmx1G -jar paper.jar --nogui < server.stdin > "$log_file" 2>&1 &
@@ -105,19 +106,41 @@ jobs:
               kill "$server_pid" 2>/dev/null || true
               exit 1
             fi
+            if [ -n "$commands_file" ]; then
+              while IFS= read -r command; do
+                [ -z "$command" ] || echo "$command" >&3
+              done < "$commands_file"
+              sleep 2
+            fi
             echo stop >&3
             exec 3>&-
             wait "$server_pid"
             rm -f server.stdin
           }
-          # First boot creates the vanilla 1.21.4 world without NewCart.
-          run_server first-start.log "Done ("
+          # First boot creates a vanilla Paper 1.21.4 world and saves test blocks.
+          cat > create-world-commands.txt <<'COMMANDS'
+          execute in minecraft:overworld run setblock 0 -63 0 minecraft:gold_block
+          execute in minecraft:overworld run setblock 0 -60 0 minecraft:stone
+          COMMANDS
+          run_server first-start.log "Done (" create-world-commands.txt
           test -d world
+          test -d world/region
           mkdir -p plugins
           cp ../build/libs/NewCart-1.0.4.jar plugins/
-          # Second boot proves NewCart can expand that already-existing world.
-          run_server newcart-start.log "World height verified: minY=-176 maxY=320"
-          grep -q "Migration complete" newcart-start.log
+          # Second boot proves migration of the already-existing 1.21.4 world.
+          cat > verify-world-commands.txt <<'COMMANDS'
+          execute in minecraft:overworld if block 0 -164 0 minecraft:bedrock run say BEDROCK_OK
+          execute in minecraft:overworld if block 0 -163 0 minecraft:deepslate run say DEEPSLATE_BOTTOM_OK
+          execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
+          execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
+          COMMANDS
+          run_server newcart-start.log "Migration complete" verify-world-commands.txt
+          grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
+          grep -q "Migration complete: [1-9][0-9]*/[1-9][0-9]* existing region entries processed" newcart-start.log
+          grep -q "BEDROCK_OK" newcart-start.log
+          grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
+          grep -q "DEEPSLATE_TOP_OK" newcart-start.log
+          grep -q "ORIGINAL_WORLD_BLOCK_PRESERVED" newcart-start.log
           ! grep -q "Error occurred while enabling NewCart" newcart-start.log
           ! grep -q "height has to be multiple of 16" newcart-start.log
       - name: Upload single-plugin package
