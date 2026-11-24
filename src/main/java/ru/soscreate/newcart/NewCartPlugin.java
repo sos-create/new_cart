@@ -132,7 +132,7 @@ public final class NewCartPlugin extends CustomWorldHeight {
         }
 
         int total = queue.size();
-        getLogger().info("Found " + total + " existing chunks. Adding the new 96-block layer incrementally.");
+        getLogger().info("Found " + total + " existing chunks. Adding 100 deepslate layers below the existing floor.");
         processBatch(world, queue, total, 0);
     }
 
