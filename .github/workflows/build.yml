@@ -50,6 +50,8 @@ jobs:
           grep -q 'CustomWorldHeight.plugin = this' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'ChunkLoadEvent' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'LAYERS_PER_TICK = 2' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'generateDeepslateOres' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'deepslate_ores_generated_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'Migration complete:' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
       - name: Build one self-contained NewCart plugin
         run: gradle --no-daemon clean build
@@ -151,7 +153,7 @@ jobs:
           test -d world/region
           test -s world/region/r.0.0.mca
           mkdir -p plugins
-          cp ../build/libs/NewCart-1.0.5.jar plugins/
+          cp ../build/libs/NewCart-1.0.6.jar plugins/
           # Second boot proves migration of the already-existing 1.21.4 world.
           cat > verify-world-commands.txt <<'COMMANDS'
           WAIT:8
@@ -168,6 +170,7 @@ jobs:
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
           grep -q "Chunk migration finished: 0,0" newcart-start.log
+          grep -Eq "Ore generation finished: chunk 0,0; total=[1-9][0-9]*" newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
           grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
           grep -q "DEEPSLATE_TOP_OK" newcart-start.log
