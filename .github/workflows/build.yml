@@ -167,11 +167,19 @@ jobs:
           COMMANDS
           run_server partial-start.log "World height verified: minY=-176 maxY=320" interrupt-commands.txt 0
           cat partial-start.log
-          grep -q "Migration checkpoint saved for chunk 0,0" partial-start.log
-          ! grep -q "First chunk migration finished: 0,0" partial-start.log
-          # The next boot must resume that chunk from its saved Y cursor.
-          cat > verify-world-commands.txt <<'COMMANDS'
-          WAIT:8
+          CHECKPOINT_COORDS="$(sed -nE 's/.*Migration checkpoint saved for chunk (-?[0-9]+),(-?[0-9]+);.*/\\1 \\2/p' partial-start.log | head -n 1)"
+          test -n "$CHECKPOINT_COORDS"
+          read -r CHECKPOINT_X CHECKPOINT_Z <<< "$CHECKPOINT_COORDS"
+          ! grep -q "First chunk migration finished: $CHECKPOINT_X,$CHECKPOINT_Z" partial-start.log
+          # Explicitly load the same chunk on the next boot to verify its persisted cursor.
+          CHECKPOINT_BLOCK_X=$((CHECKPOINT_X * 16 + 8))
+          CHECKPOINT_BLOCK_Z=$((CHECKPOINT_Z * 16 + 8))
+          cat > verify-world-commands.txt <<COMMANDS
+          WAIT:3
+          execute in minecraft:overworld run forceload add $CHECKPOINT_BLOCK_X $CHECKPOINT_BLOCK_Z
+          WAIT:12
+          execute in minecraft:overworld if block $CHECKPOINT_BLOCK_X -164 $CHECKPOINT_BLOCK_Z minecraft:bedrock run say RESUMED_CHUNK_BEDROCK_OK
+          execute in minecraft:overworld unless block $CHECKPOINT_BLOCK_X -163 $CHECKPOINT_BLOCK_Z minecraft:air run say RESUMED_CHUNK_LOWER_LAYER_OK
           execute in minecraft:overworld if block 0 -164 0 minecraft:bedrock run say BEDROCK_OK
           execute in minecraft:overworld if block 0 -163 0 minecraft:deepslate run say DEEPSLATE_BOTTOM_OK
           execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
@@ -184,8 +192,8 @@ jobs:
           run_server newcart-start.log "Done (" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
-          grep -q "Resuming chunk 0,0 from Y=" newcart-start.log
-          grep -q "First chunk migration finished: 0,0" newcart-start.log
+          grep -q "Resuming chunk $CHECKPOINT_X,$CHECKPOINT_Z from Y=" newcart-start.log
+          grep -q "First chunk migration finished: $CHECKPOINT_X,$CHECKPOINT_Z" newcart-start.log
           grep -Eq "First ore pass finished: chunk 0,0; total=[1-9][0-9]*" newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
           grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
@@ -193,6 +201,8 @@ jobs:
           grep -q "ORIGINAL_WORLD_BLOCK_PRESERVED" newcart-start.log
           grep -q "PLAYER_LOADED_CHUNK_BEDROCK_OK" newcart-start.log
           grep -q "PLAYER_LOADED_CHUNK_LOWER_LAYER_OK" newcart-start.log
+          grep -q "RESUMED_CHUNK_BEDROCK_OK" newcart-start.log
+          grep -q "RESUMED_CHUNK_LOWER_LAYER_OK" newcart-start.log
           ! grep -q "Error occurred while enabling NewCart" newcart-start.log
           ! grep -q "height has to be multiple of 16" newcart-start.log
       - name: Upload single-plugin package
