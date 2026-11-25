@@ -61,6 +61,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private boolean migrationFinished;
     private boolean checkpointNoticeLogged;
     private boolean firstChunkCompletionLogged;
+    private boolean firstOrePassLogged;
     private boolean scanInProgress;
     private volatile boolean regionScanCompleted;
     private volatile long regionEntriesFound;
@@ -362,6 +363,11 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                     int count = placed.values().stream().mapToInt(Integer::intValue).sum();
                     generatedOreBlocks += count;
                     generatedOreChunks++;
+                    if (!firstOrePassLogged) {
+                        firstOrePassLogged = true;
+                        getLogger().info("First ore pass finished: chunk " + task.pos.x + ","
+                                + task.pos.z + "; total=" + count + ".");
+                    }
                 }
                 finishActive();
             }
