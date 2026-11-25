@@ -347,6 +347,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                 PersistentDataContainer data = loaded.getPersistentDataContainer();
                 long loadedKey = chunkKey(loaded.getX(), loaded.getZ());
                 if (!quarantined.contains(loadedKey)
+                        && !failureCounts.containsKey(loadedKey)
                         && (!data.has(baseMigrationKey, PersistentDataType.BYTE)
                         || !data.has(oreGeneratedKey, PersistentDataType.BYTE))) {
                     enqueue(new ChunkPos(loaded.getX(), loaded.getZ()), true);
