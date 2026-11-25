@@ -400,10 +400,9 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                     + task.pos.z + " (Y=" + nextY + "); safely restarting that chunk from Y="
                     + DEEPSLATE_START + ".");
             nextY = DEEPSLATE_START;
-        } else if (savedY != null && !task.resumeLogged) {
+        } else if (savedY != null && task.lastCursor == null) {
             getLogger().info("Resuming chunk " + task.pos.x + "," + task.pos.z
                     + " from Y=" + nextY + ".");
-            task.resumeLogged = true;
         }
 
         if (nextY > DEEPSLATE_END) {
@@ -429,6 +428,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         }
 
         data.set(migrationCursorKey, PersistentDataType.INTEGER, cursor);
+        task.lastCursor = cursor;
         if (!checkpointNoticeLogged) {
             checkpointNoticeLogged = true;
             getLogger().info("Migration checkpoint saved for chunk " + task.pos.x + ","
@@ -562,7 +562,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         private final ChunkPos pos;
         private boolean ticketAdded;
         private World ticketWorld;
-        private boolean resumeLogged;
+        private Integer lastCursor;
 
         private ChunkTask(ChunkPos pos) {
             this.pos = pos;
