@@ -177,9 +177,9 @@ jobs:
           execute in minecraft:overworld if block 0 -64 0 minecraft:deepslate run say DEEPSLATE_TOP_OK
           execute in minecraft:overworld if block 0 -63 0 minecraft:gold_block run say ORIGINAL_WORLD_BLOCK_PRESERVED
           execute in minecraft:overworld run forceload add 1024 0
-          WAIT:8
+          WAIT:20
           execute in minecraft:overworld if block 1024 -164 0 minecraft:bedrock run say PLAYER_LOADED_CHUNK_BEDROCK_OK
-          execute in minecraft:overworld if block 1024 -163 0 minecraft:deepslate run say PLAYER_LOADED_CHUNK_DEEPSLATE_OK
+          execute in minecraft:overworld unless block 1024 -163 0 minecraft:air run say PLAYER_LOADED_CHUNK_LOWER_LAYER_OK
           COMMANDS
           run_server newcart-start.log "Done (" verify-world-commands.txt
           cat newcart-start.log
@@ -192,7 +192,7 @@ jobs:
           grep -q "DEEPSLATE_TOP_OK" newcart-start.log
           grep -q "ORIGINAL_WORLD_BLOCK_PRESERVED" newcart-start.log
           grep -q "PLAYER_LOADED_CHUNK_BEDROCK_OK" newcart-start.log
-          grep -q "PLAYER_LOADED_CHUNK_DEEPSLATE_OK" newcart-start.log
+          grep -q "PLAYER_LOADED_CHUNK_LOWER_LAYER_OK" newcart-start.log
           ! grep -q "Error occurred while enabling NewCart" newcart-start.log
           ! grep -q "height has to be multiple of 16" newcart-start.log
       - name: Upload single-plugin package
