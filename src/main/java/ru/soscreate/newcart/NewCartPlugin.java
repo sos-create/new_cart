@@ -50,9 +50,10 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private static final int MAX_CHUNK_FAILURES = 8;
 
     private String targetWorldName;
-    private final LinkedHashMap<Long, ChunkPos> priorityQueue = new LinkedHashMap<>();
+    private final Deque<ChunkPos> priorityQueue = new ArrayDeque<>();
     private final LinkedHashMap<Long, ChunkPos> queue = new LinkedHashMap<>();
     private final Set<Long> queued = new HashSet<>();
+    private final Set<Long> priorityQueued = new HashSet<>();
     private final Map<Long, Integer> failureCounts = new HashMap<>();
     private final Set<Long> quarantined = new HashSet<>();
     private final ConcurrentLinkedQueue<List<ChunkPos>> discoveredBatches = new ConcurrentLinkedQueue<>();
@@ -308,20 +309,23 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         }
 
         if (!queued.add(key)) {
-            if (prioritize) {
-                // O(1) promotion: do not linearly scan a potentially huge
-                // historical-world queue every time a player enters a chunk.
+            if (prioritize && priorityQueued.add(key)) {
+                // O(1) promotion: the player-loaded chunk goes to the very
+                // front, without scanning the historical-world backlog.
                 queue.remove(key);
-                priorityQueue.remove(key);
-                priorityQueue.put(key, pos);
+                priorityQueue.addFirst(pos);
                 migrationFinished = false;
             }
             return;
         }
 
         migrationFinished = false;
-        if (prioritize) priorityQueue.put(key, pos);
-        else queue.put(key, pos);
+        if (prioritize) {
+            priorityQueued.add(key);
+            priorityQueue.addFirst(pos);
+        } else {
+            queue.put(key, pos);
+        }
     }
 
     private void processTick() {
@@ -482,7 +486,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         }
 
         queued.remove(key);
-        priorityQueue.remove(key);
+        priorityQueued.remove(key);
         queue.remove(key);
         failureCounts.remove(key);
         quarantined.add(key);
@@ -575,12 +579,11 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     }
 
     private ChunkPos pollNextChunk() {
-        Iterator<Map.Entry<Long, ChunkPos>> priority = priorityQueue.entrySet().iterator();
-        if (priority.hasNext()) {
-            Map.Entry<Long, ChunkPos> entry = priority.next();
-            ChunkPos result = entry.getValue();
-            priority.remove();
-            return result;
+        while (!priorityQueue.isEmpty()) {
+            ChunkPos result = priorityQueue.removeFirst();
+            long key = chunkKey(result.x, result.z);
+            priorityQueued.remove(key);
+            if (queued.contains(key)) return result;
         }
 
         Iterator<Map.Entry<Long, ChunkPos>> normal = queue.entrySet().iterator();
@@ -603,7 +606,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         long key = chunkKey(finishedPos.x, finishedPos.z);
         releaseActiveTicket();
         queued.remove(key);
-        priorityQueue.remove(key);
+        priorityQueued.remove(key);
         queue.remove(key);
         failureCounts.remove(key);
         completed++;
