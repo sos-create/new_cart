@@ -50,7 +50,8 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private static final int MAX_CHUNK_FAILURES = 8;
 
     private String targetWorldName;
-    private final Deque<ChunkPos> queue = new ArrayDeque<>();
+    private final LinkedHashMap<Long, ChunkPos> priorityQueue = new LinkedHashMap<>();
+    private final LinkedHashMap<Long, ChunkPos> queue = new LinkedHashMap<>();
     private final Set<Long> queued = new HashSet<>();
     private final Map<Long, Integer> failureCounts = new HashMap<>();
     private final Set<Long> quarantined = new HashSet<>();
@@ -308,16 +309,19 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         if (!queued.add(key)) {
             if (prioritize) {
-                queue.removeIf(existing -> existing.x == pos.x && existing.z == pos.z);
-                queue.addFirst(pos);
+                // O(1) promotion: do not linearly scan a potentially huge
+                // historical-world queue every time a player enters a chunk.
+                queue.remove(key);
+                priorityQueue.remove(key);
+                priorityQueue.put(key, pos);
                 migrationFinished = false;
             }
             return;
         }
 
         migrationFinished = false;
-        if (prioritize) queue.addFirst(pos);
-        else queue.addLast(pos);
+        if (prioritize) priorityQueue.put(key, pos);
+        else queue.put(key, pos);
     }
 
     private void processTick() {
@@ -342,7 +346,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         }
 
         if (activeTask == null) {
-            ChunkPos next = queue.pollFirst();
+            ChunkPos next = pollNextChunk();
             if (next == null) {
                 if (!scanInProgress && !migrationFinished) {
                     migrationFinished = true;
@@ -467,7 +471,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         activeTask = null;
 
         if (attempts <= MAX_CHUNK_FAILURES) {
-            queue.addLast(failed.pos);
+            queue.put(key, failed.pos);
             if (attempts == 1 || attempts == 4 || attempts == MAX_CHUNK_FAILURES) {
                 getLogger().warning("Chunk " + failed.pos.x + "," + failed.pos.z
                         + " failed (" + attempts + "/" + MAX_CHUNK_FAILURES + "): "
@@ -478,6 +482,8 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         }
 
         queued.remove(key);
+        priorityQueue.remove(key);
+        queue.remove(key);
         failureCounts.remove(key);
         quarantined.add(key);
         getLogger().severe("Chunk " + failed.pos.x + "," + failed.pos.z
@@ -568,12 +574,37 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                 || (material.name().startsWith("DEEPSLATE_") && material.name().endsWith("_ORE"));
     }
 
+    private ChunkPos pollNextChunk() {
+        Iterator<Map.Entry<Long, ChunkPos>> priority = priorityQueue.entrySet().iterator();
+        if (priority.hasNext()) {
+            Map.Entry<Long, ChunkPos> entry = priority.next();
+            ChunkPos result = entry.getValue();
+            priority.remove();
+            return result;
+        }
+
+        Iterator<Map.Entry<Long, ChunkPos>> normal = queue.entrySet().iterator();
+        if (normal.hasNext()) {
+            Map.Entry<Long, ChunkPos> entry = normal.next();
+            ChunkPos result = entry.getValue();
+            normal.remove();
+            return result;
+        }
+        return null;
+    }
+
+    private int pendingChunkCount() {
+        return priorityQueue.size() + queue.size();
+    }
+
     private void finishActive() {
         if (activeTask == null) return;
         ChunkPos finishedPos = activeTask.pos;
         long key = chunkKey(finishedPos.x, finishedPos.z);
         releaseActiveTicket();
         queued.remove(key);
+        priorityQueue.remove(key);
+        queue.remove(key);
         failureCounts.remove(key);
         completed++;
         activeTask = null;
@@ -585,7 +616,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         if (completed % 100 == 0) {
             getLogger().info("Migration progress: " + completed + " chunks completed; "
-                    + queue.size() + " waiting; generated ore blocks=" + generatedOreBlocks + ".");
+                    + pendingChunkCount() + " waiting; generated ore blocks=" + generatedOreBlocks + ".");
         }
     }
 
