@@ -522,9 +522,31 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     }
 
     private boolean isAlreadyMigrated(Chunk chunk) {
-        return chunk.getBlock(0, BEDROCK_Y, 0).getType() == Material.BEDROCK
-                && chunk.getBlock(0, DEEPSLATE_START, 0).getType() == Material.DEEPSLATE
-                && chunk.getBlock(0, DEEPSLATE_END, 0).getType() == Material.DEEPSLATE;
+        // 1.0.5/1.0.6 did not write a chunk PDC marker. Verify whole layers
+        // rather than three sample blocks, because their ore pass may have
+        // replaced a sample with an ore and players may have edited a few blocks.
+        int bedrockBlocks = 0;
+        int bottomLayerBlocks = 0;
+        int topLayerBlocks = 0;
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                if (chunk.getBlock(x, BEDROCK_Y, z).getType() == Material.BEDROCK) {
+                    bedrockBlocks++;
+                }
+                if (isDeepslateOrOre(chunk.getBlock(x, DEEPSLATE_START, z).getType())) {
+                    bottomLayerBlocks++;
+                }
+                if (isDeepslateOrOre(chunk.getBlock(x, DEEPSLATE_END, z).getType())) {
+                    topLayerBlocks++;
+                }
+            }
+        }
+        return bedrockBlocks >= 240 && bottomLayerBlocks >= 240 && topLayerBlocks >= 240;
+    }
+
+    private boolean isDeepslateOrOre(Material material) {
+        return material == Material.DEEPSLATE
+                || (material.name().startsWith("DEEPSLATE_") && material.name().endsWith("_ORE"));
     }
 
     private void finishActive() {
