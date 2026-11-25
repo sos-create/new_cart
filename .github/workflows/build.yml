@@ -52,6 +52,11 @@ jobs:
           grep -q 'LAYERS_PER_TICK = 2' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'generateDeepslateOres' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'deepslate_ores_generated_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'deepslate_migration_cursor_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'bedrock_floor_generated_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'runTaskAsynchronously' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'addPluginChunkTicket' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'MAX_CHUNK_FAILURES = 8' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'Migration complete:' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
       - name: Build one self-contained NewCart plugin
         run: gradle --no-daemon clean build
@@ -98,6 +103,7 @@ jobs:
             local log_file="$1"
             local expected="$2"
             local commands_file="${3:-}"
+            local settle_seconds="${4:-3}"
             rm -f server.stdin
             mkfifo server.stdin
             java -Xms512M -Xmx1G -jar paper.jar --nogui < server.stdin > "$log_file" 2>&1 &
@@ -126,7 +132,7 @@ jobs:
                   echo "$command" >&3
                 fi
               done < "$commands_file"
-              sleep 3
+              sleep "$settle_seconds"
             fi
             echo stop >&3
             exec 3>&-
@@ -153,8 +159,16 @@ jobs:
           test -d world/region
           test -s world/region/r.0.0.mca
           mkdir -p plugins
-          cp ../build/libs/NewCart-1.0.6.jar plugins/
-          # Second boot proves migration of the already-existing 1.21.4 world.
+          cp ../build/libs/NewCart-1.0.7.jar plugins/
+          # Interrupt a real in-progress chunk after its first persistent checkpoint.
+          cat > interrupt-commands.txt <<'COMMANDS'
+          WAIT:1
+          COMMANDS
+          run_server partial-start.log "World height verified: minY=-176 maxY=320" interrupt-commands.txt 0
+          cat partial-start.log
+          grep -q "Migration checkpoint saved for chunk 0,0" partial-start.log
+          ! grep -q "First chunk migration finished: 0,0" partial-start.log
+          # The next boot must resume that chunk from its saved Y cursor.
           cat > verify-world-commands.txt <<'COMMANDS'
           WAIT:8
           execute in minecraft:overworld if block 0 -164 0 minecraft:bedrock run say BEDROCK_OK
@@ -169,8 +183,9 @@ jobs:
           run_server newcart-start.log "Done (" verify-world-commands.txt
           cat newcart-start.log
           grep -q "World height verified: minY=-176 maxY=320" newcart-start.log
-          grep -q "Chunk migration finished: 0,0" newcart-start.log
-          grep -Eq "Ore generation finished: chunk 0,0; total=[1-9][0-9]*" newcart-start.log
+          grep -q "Resuming chunk 0,0 from Y=" newcart-start.log
+          grep -q "First chunk migration finished: 0,0" newcart-start.log
+          grep -Eq "Migration complete: .*new ore blocks generated=[1-9][0-9]*" newcart-start.log
           grep -q "BEDROCK_OK" newcart-start.log
           grep -q "DEEPSLATE_BOTTOM_OK" newcart-start.log
           grep -q "DEEPSLATE_TOP_OK" newcart-start.log
