@@ -328,6 +328,19 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         World world = Bukkit.getWorld(targetWorldName);
         if (world == null) return;
 
+        // ChunkLoadEvent is the primary fast path. This periodic reconciliation
+        // is a safety net for server forks and force-load paths that change the
+        // loaded set without delivering the event to every plugin listener.
+        if (tickCounter % 20L == 0L) {
+            for (Chunk loaded : world.getLoadedChunks()) {
+                PersistentDataContainer data = loaded.getPersistentDataContainer();
+                if (!data.has(baseMigrationKey, PersistentDataType.BYTE)
+                        || !data.has(oreGeneratedKey, PersistentDataType.BYTE)) {
+                    enqueue(new ChunkPos(loaded.getX(), loaded.getZ()), true);
+                }
+            }
+        }
+
         if (activeTask == null) {
             ChunkPos next = queue.pollFirst();
             if (next == null) {
