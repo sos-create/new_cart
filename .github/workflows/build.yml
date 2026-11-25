@@ -167,7 +167,7 @@ jobs:
           COMMANDS
           run_server partial-start.log "World height verified: minY=-176 maxY=320" interrupt-commands.txt 0
           cat partial-start.log
-          CHECKPOINT_COORDS="$(sed -nE 's/.*Migration checkpoint saved for chunk (-?[0-9]+),(-?[0-9]+);.*/\\1 \\2/p' partial-start.log | head -n 1)"
+          CHECKPOINT_COORDS="$(grep -oE 'Migration checkpoint saved for chunk -?[0-9]+,-?[0-9]+' partial-start.log | head -n 1 | cut -d' ' -f6 | tr ',' ' ')"
           test -n "$CHECKPOINT_COORDS"
           read -r CHECKPOINT_X CHECKPOINT_Z <<< "$CHECKPOINT_COORDS"
           ! grep -q "First chunk migration finished: $CHECKPOINT_X,$CHECKPOINT_Z" partial-start.log
