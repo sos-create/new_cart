@@ -1,33 +1,43 @@
 # NewCart — Paper 1.21.4
 
-NewCart is a **single self-contained Paper plugin JAR**. The CustomWorldHeight engine is embedded inside NewCart; no second plugin is required.
+NewCart is a single self-contained Paper plugin JAR. The CustomWorldHeight engine is embedded in the JAR; a second height plugin is not required.
 
-## Existing worlds
+## What it changes
 
-NewCart targets an already created, standard Paper 1.21.4 Overworld. You do not need to create a new world, reset the world, or regenerate existing chunks. The height engine is initialized during the server's startup lifecycle, before the world is initialized, and applies the expanded dimension to the existing world.
+NewCart expands the **already existing Overworld** downward:
 
-Default world folder name: `world`. Change `new-cart.world` in the generated NewCart config if your Overworld folder has another name.
+- Minimum Y: `-176`
+- Maximum Y: `319` (exclusive API limit: `320`)
+- Bedrock floor: `Y=-164`
+- Deepslate: `Y=-163..-64` (100 layers)
+- `Y=-63` and everything above it are left unchanged by the migration.
 
-## World layout
+It adds deterministic deepslate ore veins in the new lower layer range: coal, copper, iron, gold, redstone, lapis, diamond and mountain-biome emerald ore. Ore placement only replaces DEEPSLATE, so it does not overwrite an existing ore or a non-deepslate block. Each chunk receives this ore pass once.
 
-- New minimum Y: **-176**
-- Maximum Y: **319** (unchanged)
-- Y=-164: bedrock
-- Y=-163 through Y=-64: 100 layers of deepslate
-- Y=-63 and above: untouched
+## Existing worlds and upgrades
 
-Only chunks already present in the world's `region/*.mca` files are processed. Chunks are handled gradually using `chunks-per-tick: 1`; new chunks remain under normal Paper world generation.
+- The plugin processes chunks already recorded in the world's `region/*.mca` files and chunks loaded later by players.
+- The region location tables are read asynchronously; block changes are performed on Paper's server thread.
+- Processing is gradual: two deepslate layers per server tick.
+- Chunk-level persistent checkpoints are written after each vertical slice. A normal restart resumes from the saved Y cursor instead of restarting that chunk from the bottom.
+- Failed chunks are retried without blocking the whole queue. After eight consecutive failures they are quarantined; loading that chunk by a player triggers another attempt.
+- Chunks already migrated by NewCart 1.0.5 or 1.0.6 are recognized and receive the one-time ore pass without rebuilding the deepslate layers.
+
+The plugin does not regenerate the world and does not require a new world folder. **Back up the complete world before changing its dimension height.** Never lower the expanded height after the world has been opened with NewCart.
 
 ## Installation
 
-1. Stop the server and make a complete backup of the existing world folder.
-2. Remove the old separate `CustomWorldHeight.jar` and old `NewCart-*.jar` from `plugins` to avoid duplicate height handlers.
-3. Put only the new `NewCart-1.0.4.jar` in `plugins`.
-4. Start the server. NewCart creates its config automatically on first startup and initializes the height engine before the world loads.
-5. Check the console for NewCart's height and migration messages. Wait for `Migration complete` before considering the block migration finished.
+1. Stop the Paper 1.21.4 server.
+2. Make a full backup of the server and the existing Overworld folder.
+3. Remove old `NewCart-*.jar` and separate `CustomWorldHeight*.jar` copies from `plugins` to avoid duplicate height handlers.
+4. Put only `NewCart-1.0.7.jar` in `plugins`.
+5. Start the server and check the console for `World height verified: minY=-176 maxY=320`.
+6. Let the gradual migration finish. The final summary reports processed chunks, ore blocks generated and any quarantined chunks.
 
-If upgrading from the previous two-JAR NewCart package, the old NewCart config is backed up as `plugins/NewCart/config.yml.pre-single-jar.bak` and migrated automatically. Keep the world backup until the server has been checked in-game.
+The default world folder is `world`. If the Overworld folder has another name, change `new-cart.world` in `plugins/NewCart/config.yml`, then restart.
 
-## Safety notes
+## Compatibility and limits
 
-This is a dimension-height change, not merely a block edit. Test on a copy first. Do not lower the world height after expanding it. The plugin aborts the block migration if the active world's reported height is not minY=-176 and maxY=320. The GitHub build verifies packaging and class inclusion; only a live Paper server test can confirm runtime behavior on a particular server.
+This build deliberately targets **Paper 1.21.4 / Java 21** and safely disables itself on another Minecraft version. It is not a Folia build and should not be used on Folia. A successful CI smoke test covers Paper 1.21.4, an already-created world, checkpoint/restart recovery, the lower bedrock/deepslate positions, preservation at Y=-63, ore generation and a separately loaded chunk.
+
+The smoke test cannot guarantee compatibility with every third-party plugin, custom world generator, damaged region file or modified server fork. Keep the backup until you have checked the world in-game.
