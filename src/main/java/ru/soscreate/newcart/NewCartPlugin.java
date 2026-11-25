@@ -60,6 +60,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private boolean migrationStarted;
     private boolean migrationFinished;
     private boolean checkpointNoticeLogged;
+    private boolean firstChunkCompletionLogged;
     private boolean scanInProgress;
     private volatile boolean regionScanCompleted;
     private volatile long regionEntriesFound;
@@ -528,12 +529,18 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
     private void finishActive() {
         if (activeTask == null) return;
-        long key = chunkKey(activeTask.pos.x, activeTask.pos.z);
+        ChunkPos finishedPos = activeTask.pos;
+        long key = chunkKey(finishedPos.x, finishedPos.z);
         releaseActiveTicket();
         queued.remove(key);
         failureCounts.remove(key);
         completed++;
         activeTask = null;
+
+        if (!firstChunkCompletionLogged) {
+            firstChunkCompletionLogged = true;
+            getLogger().info("First chunk migration finished: " + finishedPos.x + "," + finishedPos.z + ".");
+        }
 
         if (completed % 100 == 0) {
             getLogger().info("Migration progress: " + completed + " chunks completed; "
