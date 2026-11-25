@@ -169,9 +169,17 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
 
         Chunk chunk = event.getChunk();
         long key = chunkKey(chunk.getX(), chunk.getZ());
+
+        // getChunkAt() inside our own active task also fires ChunkLoadEvent.
+        // It must not reset that task's retry counter or enqueue a duplicate.
+        if (activeTask != null && activeTask.pos.x == chunk.getX()
+                && activeTask.pos.z == chunk.getZ()) {
+            return;
+        }
+
         if (quarantined.remove(key)) {
             failureCounts.remove(key);
-            getLogger().warning("Retrying previously quarantined chunk after it was loaded: "
+            getLogger().warning("Retrying previously quarantined chunk after a new chunk-load event: "
                     + chunk.getX() + "," + chunk.getZ());
         }
         enqueue(new ChunkPos(chunk.getX(), chunk.getZ()), true);
@@ -299,11 +307,6 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private void enqueue(ChunkPos pos, boolean prioritize) {
         long key = chunkKey(pos.x, pos.z);
 
-        if (prioritize) {
-            quarantined.remove(key);
-            failureCounts.remove(key);
-        }
-
         if (activeTask != null && activeTask.pos.x == pos.x && activeTask.pos.z == pos.z) {
             return;
         }
@@ -342,8 +345,10 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         if (tickCounter % 20L == 0L) {
             for (Chunk loaded : world.getLoadedChunks()) {
                 PersistentDataContainer data = loaded.getPersistentDataContainer();
-                if (!data.has(baseMigrationKey, PersistentDataType.BYTE)
-                        || !data.has(oreGeneratedKey, PersistentDataType.BYTE)) {
+                long loadedKey = chunkKey(loaded.getX(), loaded.getZ());
+                if (!quarantined.contains(loadedKey)
+                        && (!data.has(baseMigrationKey, PersistentDataType.BYTE)
+                        || !data.has(oreGeneratedKey, PersistentDataType.BYTE))) {
                     enqueue(new ChunkPos(loaded.getX(), loaded.getZ()), true);
                 }
             }
