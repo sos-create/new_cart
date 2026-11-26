@@ -45,6 +45,10 @@ NewCart prioritizes its own terrain migration for chunks already loaded by playe
 
 The bounded region buffer and 2,048-entry historical backlog limit NewCart's additional memory use. The TPS guard limits its block-edit work but does not change Paper's view distance, chunk-send rate, worker-thread count, or server-wide chunk cache.
 
+## Online-mode servers and VPN access
+
+NewCart does not change player authentication, proxy forwarding, firewall rules or VPN routing. It runs server-side and is compatible with a normally configured Paper server using `online-mode=true`. Players may continue connecting through the VPN/network route already working for the server; no VPN dependency or extra outbound service is introduced by NewCart. The CI smoke test boots Paper with `online-mode=true` to verify the plugin starts under the normal online-mode setting.
+
 ## Compatibility and limits
 
 This build deliberately targets **Paper 1.21.4 / Java 21** and safely disables itself on another Minecraft version. It is not a Folia build and should not be used on Folia. A successful CI smoke test covers Paper 1.21.4, an already-created world, checkpoint/restart recovery, the lower bedrock/deepslate positions, preservation at Y=-63, ore generation and a separately loaded chunk.
