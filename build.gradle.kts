@@ -1,7 +1,7 @@
 plugins { java }
 
 group = "ru.soscreate"
-version = "1.0.7"
+version = "1.0.8"
 
 repositories {
     mavenCentral()
@@ -14,6 +14,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     // Used at compile time and unpacked into NewCart's single output JAR.
     implementation(files(customWorldHeightJar))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 
 java { toolchain.languageVersion.set(JavaLanguageVersion.of(21)) }
@@ -21,6 +22,10 @@ java { toolchain.languageVersion.set(JavaLanguageVersion.of(21)) }
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.release.set(21)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.processResources {

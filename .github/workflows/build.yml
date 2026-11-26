@@ -49,7 +49,13 @@ jobs:
           grep -q 'DEEPSLATE_START = -163' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'CustomWorldHeight.plugin = this' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'ChunkLoadEvent' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
-          grep -q 'LAYERS_PER_TICK = 2' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'MAX_PENDING_REGION_CHUNKS = 2048' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'REGION_BATCH_BUFFER_CAPACITY = 4' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'ArrayBlockingQueue' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'layersForTps' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
+          grep -q 'pause-below-tps: 18.0' src/main/resources/config.yml
+          grep -q 'full-speed-at-tps: 19.5' src/main/resources/config.yml
+          grep -q 'player-loaded chunk priority' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'generateDeepslateOres' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'deepslate_ores_generated_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'First ore pass finished:' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
@@ -160,7 +166,7 @@ jobs:
           test -d world/region
           test -s world/region/r.0.0.mca
           mkdir -p plugins
-          cp ../build/libs/NewCart-1.0.7.jar plugins/
+          cp ../build/libs/NewCart-1.0.8.jar plugins/
           # Interrupt a real in-progress chunk after its first persistent checkpoint.
           cat > interrupt-commands.txt <<'COMMANDS'
           WAIT:1

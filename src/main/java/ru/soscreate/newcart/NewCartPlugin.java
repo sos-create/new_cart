@@ -32,7 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,10 +46,14 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private static final int BEDROCK_Y = -164;
     private static final int DEEPSLATE_START = -163;
     private static final int DEEPSLATE_END = -64;
-    private static final int LAYERS_PER_TICK = 2;
     private static final int SCAN_BATCH_SIZE = 512;
     private static final int SCAN_BATCHES_PER_TICK = 2;
+    private static final int REGION_BATCH_BUFFER_CAPACITY = 4;
+    private static final int MAX_PENDING_REGION_CHUNKS = 2048;
     private static final int MAX_CHUNK_FAILURES = 8;
+    private static final double DEFAULT_PAUSE_BELOW_TPS = 18.0;
+    private static final double DEFAULT_FULL_SPEED_TPS = 19.5;
+    private static final int DEFAULT_MAX_LAYERS_PER_TICK = 2;
 
     private String targetWorldName;
     private final Deque<ChunkPos> priorityQueue = new ArrayDeque<>();
@@ -56,7 +62,12 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private final Set<Long> priorityQueued = new HashSet<>();
     private final Map<Long, Integer> failureCounts = new HashMap<>();
     private final Set<Long> quarantined = new HashSet<>();
-    private final ConcurrentLinkedQueue<List<ChunkPos>> discoveredBatches = new ConcurrentLinkedQueue<>();
+    // A bounded producer/consumer buffer prevents a large region scan from
+    // retaining every discovered chunk in RAM before the tick thread catches up.
+    private final BlockingQueue<List<ChunkPos>> discoveredBatches =
+            new ArrayBlockingQueue<>(REGION_BATCH_BUFFER_CAPACITY);
+    private List<ChunkPos> currentDiscoveredBatch;
+    private int currentDiscoveredBatchIndex;
 
     private ChunkTask activeTask;
     private boolean migrationStarted;
@@ -72,6 +83,11 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
     private long completed;
     private long generatedOreChunks;
     private long generatedOreBlocks;
+    private volatile boolean stopping;
+    private boolean performancePaused;
+    private double pauseBelowTps = DEFAULT_PAUSE_BELOW_TPS;
+    private double fullSpeedAtTps = DEFAULT_FULL_SPEED_TPS;
+    private int maxLayersPerTick = DEFAULT_MAX_LAYERS_PER_TICK;
 
     private NamespacedKey bedrockKey;
     private NamespacedKey baseMigrationKey;
@@ -151,16 +167,58 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
             return;
         }
 
+        loadPerformanceSettings();
         Bukkit.getPluginManager().registerEvents(this, this);
-        getLogger().info("NewCart 1.0.7 enabled for Paper 1.21.4: persistent chunk checkpoints, "
-                + "safe retries, asynchronous region scan and deepslate ore generation.");
+        getLogger().info("NewCart 1.0.8 enabled for Paper 1.21.4: persistent checkpoints, "
+                + "player-loaded chunk priority, bounded region scanning, TPS-aware migration and ore generation.");
+        getLogger().info("Performance guard: pause below " + pauseBelowTps + " TPS; use one layer below "
+                + fullSpeedAtTps + " TPS; maximum " + maxLayersPerTick + " layers per tick.");
         Bukkit.getScheduler().runTaskLater(this, this::beginMigration, 40L);
     }
 
     @Override
     public void onDisable() {
+        stopping = true;
         releaseActiveTicket();
         super.onDisable();
+    }
+
+    private void loadPerformanceSettings() {
+        double configuredPause = getConfig().getDouble(
+                "new-cart.performance.pause-below-tps", DEFAULT_PAUSE_BELOW_TPS);
+        double configuredFullSpeed = getConfig().getDouble(
+                "new-cart.performance.full-speed-at-tps", DEFAULT_FULL_SPEED_TPS);
+        int configuredLayers = getConfig().getInt(
+                "new-cart.performance.max-layers-per-tick", DEFAULT_MAX_LAYERS_PER_TICK);
+
+        if (!Double.isFinite(configuredPause) || !Double.isFinite(configuredFullSpeed)
+                || configuredPause < 0.0 || configuredPause >= 20.0
+                || configuredFullSpeed <= configuredPause || configuredFullSpeed > 20.0) {
+            getLogger().warning("Invalid TPS guard thresholds in config.yml; using safe defaults.");
+            configuredPause = DEFAULT_PAUSE_BELOW_TPS;
+            configuredFullSpeed = DEFAULT_FULL_SPEED_TPS;
+        }
+        pauseBelowTps = configuredPause;
+        fullSpeedAtTps = configuredFullSpeed;
+
+        if (configuredLayers < 1 || configuredLayers > DEFAULT_MAX_LAYERS_PER_TICK) {
+            getLogger().warning("max-layers-per-tick is limited to 1..2; clamping the configured value.");
+        }
+        maxLayersPerTick = Math.max(1, Math.min(DEFAULT_MAX_LAYERS_PER_TICK, configuredLayers));
+    }
+
+    private double oneMinuteTps() {
+        double[] samples = Bukkit.getTPS();
+        return samples == null || samples.length == 0 ? 0.0 : samples[0];
+    }
+
+    static int layersForTps(double tps, double pauseBelow, double fullSpeedAt, int maximumLayers) {
+        if (!Double.isFinite(tps) || !Double.isFinite(pauseBelow) || !Double.isFinite(fullSpeedAt)
+                || tps < pauseBelow) {
+            return 0;
+        }
+        if (tps < fullSpeedAt) return 1;
+        return Math.max(1, Math.min(DEFAULT_MAX_LAYERS_PER_TICK, maximumLayers));
     }
 
     @EventHandler
@@ -240,7 +298,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         List<ChunkPos> batch = new ArrayList<>(SCAN_BATCH_SIZE);
         try (var files = Files.list(regionDir)) {
             Iterator<Path> iterator = files.iterator();
-            while (iterator.hasNext() && !Thread.currentThread().isInterrupted()) {
+            while (iterator.hasNext() && !stopping && !Thread.currentThread().isInterrupted()) {
                 Path file = iterator.next();
                 Matcher matcher = REGION_NAME.matcher(file.getFileName().toString());
                 if (!matcher.matches()) continue;
@@ -269,7 +327,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                     found++;
 
                     if (batch.size() >= SCAN_BATCH_SIZE) {
-                        discoveredBatches.add(List.copyOf(batch));
+                        publishDiscoveredBatch(batch);
                         batch.clear();
                     }
                 }
@@ -277,20 +335,57 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         } catch (Exception ex) {
             regionScanFailure = ex.getClass().getSimpleName() + ": " + ex.getMessage();
         } finally {
-            if (!batch.isEmpty()) discoveredBatches.add(List.copyOf(batch));
+            if (!batch.isEmpty()) publishDiscoveredBatch(batch);
             regionEntriesFound = found;
             regionScanCompleted = true;
         }
     }
 
+    private void publishDiscoveredBatch(List<ChunkPos> batch) {
+        if (batch.isEmpty()) return;
+        List<ChunkPos> immutableBatch = List.copyOf(batch);
+        while (!stopping && !Thread.currentThread().isInterrupted()) {
+            try {
+                if (discoveredBatches.offer(immutableBatch, 250L, TimeUnit.MILLISECONDS)) return;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
     private void drainDiscoveredChunks() {
-        for (int i = 0; i < SCAN_BATCHES_PER_TICK; i++) {
-            List<ChunkPos> batch = discoveredBatches.poll();
-            if (batch == null) break;
-            for (ChunkPos pos : batch) enqueue(pos, false);
+        int maxChunksThisTick = SCAN_BATCH_SIZE * SCAN_BATCHES_PER_TICK;
+        int movedThisTick = 0;
+
+        while (movedThisTick < maxChunksThisTick
+                && queue.size() < MAX_PENDING_REGION_CHUNKS) {
+            if (currentDiscoveredBatch == null) {
+                currentDiscoveredBatch = discoveredBatches.poll();
+                currentDiscoveredBatchIndex = 0;
+                if (currentDiscoveredBatch == null) break;
+            }
+
+            while (currentDiscoveredBatchIndex < currentDiscoveredBatch.size()
+                    && movedThisTick < maxChunksThisTick
+                    && queue.size() < MAX_PENDING_REGION_CHUNKS) {
+                ChunkPos pos = currentDiscoveredBatch.get(currentDiscoveredBatchIndex++);
+                enqueue(pos, false);
+                movedThisTick++;
+            }
+
+            if (currentDiscoveredBatchIndex >= currentDiscoveredBatch.size()) {
+                currentDiscoveredBatch = null;
+                currentDiscoveredBatchIndex = 0;
+            } else {
+                // Keep the unprocessed tail for a later tick. The region scanner
+                // is back-pressured by the bounded queue while this backlog drains.
+                break;
+            }
         }
 
-        if (scanInProgress && regionScanCompleted && discoveredBatches.isEmpty()) {
+        boolean batchesDrained = currentDiscoveredBatch == null && discoveredBatches.isEmpty();
+        if (scanInProgress && regionScanCompleted && batchesDrained) {
             scanInProgress = false;
             if (regionScanFailure != null) {
                 getLogger().severe("Region scan finished with an error after finding "
@@ -355,6 +450,28 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
             }
         }
 
+        // Use Paper's one-minute TPS sample as a conservative work budget.
+        // When the server is struggling, do not load/ticket another chunk or
+        // perform block edits; the active task keeps its persistent cursor.
+        double currentTps = oneMinuteTps();
+        int layerBudget = layersForTps(
+                currentTps, pauseBelowTps, fullSpeedAtTps, maxLayersPerTick);
+        if (layerBudget == 0) {
+            if (!performancePaused) {
+                getLogger().warning("NewCart migration paused: server TPS is "
+                        + String.format(java.util.Locale.ROOT, "%.2f", currentTps)
+                        + " (pause threshold " + pauseBelowTps + ").");
+                performancePaused = true;
+            }
+            releaseActiveTicket();
+            return;
+        }
+        if (performancePaused) {
+            getLogger().info("NewCart migration resumed: server TPS recovered to "
+                    + String.format(java.util.Locale.ROOT, "%.2f", currentTps) + ".");
+            performancePaused = false;
+        }
+
         if (activeTask == null) {
             ChunkPos next = pollNextChunk();
             if (next == null) {
@@ -382,7 +499,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
                 throw new IllegalStateException("Paper did not return the region-backed chunk");
             }
 
-            boolean baseDone = migrateBaseSlice(chunk, task);
+            boolean baseDone = migrateBaseSlice(chunk, task, layerBudget);
             if (baseDone) {
                 if (!chunk.getPersistentDataContainer().has(oreGeneratedKey, PersistentDataType.BYTE)) {
                     Map<Material, Integer> placed = generateDeepslateOres(chunk, world);
@@ -408,7 +525,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
      * The cursor and completion flags live in the chunk PDC, so a normal stop
      * or crash can resume at the last saved layer instead of restarting at -163.
      */
-    private boolean migrateBaseSlice(Chunk chunk, ChunkTask task) {
+    private boolean migrateBaseSlice(Chunk chunk, ChunkTask task, int layerBudget) {
         PersistentDataContainer data = chunk.getPersistentDataContainer();
         if (data.has(baseMigrationKey, PersistentDataType.BYTE)) return true;
 
@@ -445,7 +562,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
             return true;
         }
 
-        int endY = Math.min(DEEPSLATE_END, nextY + LAYERS_PER_TICK - 1);
+        int endY = Math.min(DEEPSLATE_END, nextY + layerBudget - 1);
         for (int y = nextY; y <= endY; y++) {
             for (int x = 0; x < 16; x++) {
                 for (int z = 0; z < 16; z++) {

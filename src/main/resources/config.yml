@@ -7,6 +7,10 @@ new-cart:
   logical-height: 384
   cloud-height: default
   dimension-type: overworld
+  performance:
+    pause-below-tps: 18.0
+    full-speed-at-tps: 19.5
+    max-layers-per-tick: 2
 
 # Existing and newly loaded chunks are processed in small vertical slices.
 # The plugin changes two deepslate layers per server tick to avoid freezes.
