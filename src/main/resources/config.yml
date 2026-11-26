@@ -13,4 +13,4 @@ new-cart:
     max-layers-per-tick: 2
 
 # Existing and newly loaded chunks are processed in small vertical slices.
-# The plugin changes two deepslate layers per server tick to avoid freezes.
+# At most two deepslate layers are changed per tick; the TPS guard can reduce this to one or pause it.

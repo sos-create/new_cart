@@ -212,15 +212,6 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         return samples == null || samples.length == 0 ? 0.0 : samples[0];
     }
 
-    static int layersForTps(double tps, double pauseBelow, double fullSpeedAt, int maximumLayers) {
-        if (!Double.isFinite(tps) || !Double.isFinite(pauseBelow) || !Double.isFinite(fullSpeedAt)
-                || tps < pauseBelow) {
-            return 0;
-        }
-        if (tps < fullSpeedAt) return 1;
-        return Math.max(1, Math.min(DEFAULT_MAX_LAYERS_PER_TICK, maximumLayers));
-    }
-
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
         if (!event.getWorld().getName().equals(targetWorldName)) return;
@@ -454,7 +445,7 @@ public final class NewCartPlugin extends CustomWorldHeight implements Listener {
         // When the server is struggling, do not load/ticket another chunk or
         // perform block edits; the active task keeps its persistent cursor.
         double currentTps = oneMinuteTps();
-        int layerBudget = layersForTps(
+        int layerBudget = TpsWorkBudget.layersForTps(
                 currentTps, pauseBelowTps, fullSpeedAtTps, maxLayersPerTick);
         if (layerBudget == 0) {
             if (!performancePaused) {
