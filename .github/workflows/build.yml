@@ -54,7 +54,9 @@ jobs:
           grep -q 'ArrayBlockingQueue' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'layersForTps' src/main/java/ru/soscreate/newcart/TpsWorkBudget.java
           grep -q 'pause-below-tps: 18.0' src/main/resources/config.yml
-          grep -q '^          online-mode=true          grep -q 'full-speed-at-tps: 19.5' src/main/resources/config.yml
+          grep -q 'pause-below-tps: 18.0' src/main/resources/config.yml
+          grep -q 'full-speed-at-tps: 19.5' src/main/resources/config.yml
+          grep -q 'online-mode=true' .github/workflows/build.yml
           grep -q 'player-loaded chunk priority' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'generateDeepslateOres' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
           grep -q 'deepslate_ores_generated_v1' src/main/java/ru/soscreate/newcart/NewCartPlugin.java
